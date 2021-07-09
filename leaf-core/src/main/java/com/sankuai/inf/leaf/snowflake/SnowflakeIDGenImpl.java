@@ -19,15 +19,46 @@ public class SnowflakeIDGenImpl implements IDGen {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(SnowflakeIDGenImpl.class);
 
+    /**
+     * 起始时间戳，用于用当前时间戳减去这个时间戳，算出偏移量
+     * SnowflakeID 可以使用 79 年是相对于 twepoch 时间戳
+     */
     private final long twepoch;
+    /**
+     * workID占用的比特数
+     */
     private final long workerIdBits = 10L;
+    /**
+     * 最大能够分配的workerid =1023
+     */
     private final long maxWorkerId = ~(-1L << workerIdBits);//最大能够分配的workerid =1023
+    /**
+     * 自增序列号
+     */
     private final long sequenceBits = 12L;
+    /**
+     * workID左移位数为自增序列号的位数
+     */
     private final long workerIdShift = sequenceBits;
+    /**
+     * 时间戳的左移位数为 自增序列号的位数+workID的位数
+     */
     private final long timestampLeftShift = sequenceBits + workerIdBits;
+    /**
+     * 掩码 后12位都为1
+     */
     private final long sequenceMask = ~(-1L << sequenceBits);
+    /**
+     * 工作机器 id
+     */
     private long workerId;
+    /**
+     * 自增序列 id
+     */
     private long sequence = 0L;
+    /**
+     * 最后一次生成 Snowflake 时间戳
+     */
     private long lastTimestamp = -1L;
     private static final Random RANDOM = new Random();
 
@@ -88,12 +119,23 @@ public class SnowflakeIDGenImpl implements IDGen {
             //如果是新的ms开始
             sequence = RANDOM.nextInt(100);
         }
+
         lastTimestamp = timestamp;
+
+        // timestampLeftShift = sequenceBits + workerIdBits = 12 + 10 = 22
+        // workerIdShift = 12
         long id = ((timestamp - twepoch) << timestampLeftShift) | (workerId << workerIdShift) | sequence;
         return new Result(id, Status.SUCCESS);
 
     }
 
+    /**
+     * 比最后一次上报晚的时间戳
+     * 当前时间戳内序列号使用玩需要自旋等待下一个时间戳
+     *
+     * @param lastTimestamp
+     * @return
+     */
     protected long tilNextMillis(long lastTimestamp) {
         long timestamp = timeGen();
         while (timestamp <= lastTimestamp) {
@@ -102,10 +144,20 @@ public class SnowflakeIDGenImpl implements IDGen {
         return timestamp;
     }
 
+    /**
+     * 当前时间戳
+     *
+     * @return
+     */
     protected long timeGen() {
         return System.currentTimeMillis();
     }
 
+    /**
+     * 工作 id
+     *
+     * @return
+     */
     public long getWorkerId() {
         return workerId;
     }
