@@ -26,19 +26,48 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * 通过 zookeeper 维护 workId
+ */
 public class SnowflakeZookeeperHolder {
     private static final Logger LOGGER = LoggerFactory.getLogger(SnowflakeZookeeperHolder.class);
+    /**
+     * 形如：/snowflake/com.sankuai.leaf.opensource.test/forever/172.18.197.165:8080-0000000008
+     */
     private String zk_AddressNode = null;//保存自身的key  ip:port-000000001
+    /**
+     * 本机 ip:leaf.snowflake.port
+     */
     private String listenAddress = null;//保存自身的key ip:port
+    /**
+     * 机器 id 标识
+     */
     private int workerID;
+    /**
+     * 形如：snowflake/com.sankuai.leaf.opensource.test
+     */
     private static final String PREFIX_ZK_PATH = "/snowflake/" + PropertyFactory.getProperties().getProperty("leaf.name");
+    /**
+     * 形如：/var/folders/wn/9df_yf2n6hs7w_5df3hp86y80000gn/T//com.sankuai.leaf.opensource.test/leafconf/{port}/workerID.properties
+     */
     private static final String PROP_PATH = System.getProperty("java.io.tmpdir") + File.separator + PropertyFactory.getProperties().getProperty("leaf.name") + "/leafconf/{port}/workerID.properties";
+    /**
+     * 形如：/snowflake/com.sankuai.leaf.opensource.test/forever
+     */
     private static final String PATH_FOREVER = PREFIX_ZK_PATH + "/forever";//保存所有数据持久的节点
     private String ip;
     private String port;
     private String connectionString;
+    /**
+     * 最后一次上报数据时间
+     */
     private long lastUpdateTime;
 
+    /**
+     * @param ip               本机 id
+     * @param port
+     * @param connectionString zk 连接
+     */
     public SnowflakeZookeeperHolder(String ip, String port, String connectionString) {
         this.ip = ip;
         this.port = port;
@@ -55,6 +84,7 @@ public class SnowflakeZookeeperHolder {
                 //不存在根节点,机器第一次启动,创建/snowflake/ip:port-000000000,并上传数据
                 zk_AddressNode = createNode(curator);
                 //worker id 默认是0
+                // 更新本地缓存文件
                 updateLocalWorkerID(workerID);
                 //定时上报本机时间给forever节点
                 ScheduledUploadData(curator, zk_AddressNode);
@@ -64,6 +94,7 @@ public class SnowflakeZookeeperHolder {
                 Map<String, String> realNode = Maps.newHashMap();//ip:port->(ipport-000001)
                 //存在根节点,先检查是否有属于自己的根节点
                 List<String> keys = curator.getChildren().forPath(PATH_FOREVER);
+                // key形如：172.18.197.165:8080-0000000008
                 for (String key : keys) {
                     String[] nodeKey = key.split("-");
                     realNode.put(nodeKey[0], key);

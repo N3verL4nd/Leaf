@@ -25,7 +25,7 @@ public class SnowflakeIDGenImpl implements IDGen {
      */
     private final long twepoch;
     /**
-     * workID占用的比特数
+     * workID 长度
      */
     private final long workerIdBits = 10L;
     /**
@@ -33,7 +33,7 @@ public class SnowflakeIDGenImpl implements IDGen {
      */
     private final long maxWorkerId = ~(-1L << workerIdBits);//最大能够分配的workerid =1023
     /**
-     * 自增序列号
+     * 自增序列号长度
      */
     private final long sequenceBits = 12L;
     /**
@@ -57,7 +57,7 @@ public class SnowflakeIDGenImpl implements IDGen {
      */
     private long sequence = 0L;
     /**
-     * 最后一次生成 Snowflake 时间戳
+     * 最后一次生成 SnowflakeId 的时间戳
      */
     private long lastTimestamp = -1L;
     private static final Random RANDOM = new Random();
@@ -69,7 +69,7 @@ public class SnowflakeIDGenImpl implements IDGen {
 
     /**
      * @param zkAddress zk地址
-     * @param port      snowflake监听端口
+     * @param port      snowflake 监听端口
      * @param twepoch   起始的时间戳
      */
     public SnowflakeIDGenImpl(String zkAddress, int port, long twepoch) {
