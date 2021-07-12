@@ -18,7 +18,9 @@ public class SegmentBuffer {
     private final AtomicBoolean threadRunning; //线程是否在运行中
     private final ReadWriteLock lock;
 
+    // 本地维护的步长（动态变更）
     private volatile int step;
+    // 数据库中的步长
     private volatile int minStep;
     private volatile long updateTimestamp;
 
