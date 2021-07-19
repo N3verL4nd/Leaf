@@ -61,6 +61,8 @@ public class SegmentIDGenImpl implements IDGen {
     public boolean init() {
         logger.info("Init ...");
         // 确保加载到kv后才初始化成功
+        // 只是对 Segment 设置默认初始化
+        // 真正的初始化在延迟初始化 get 方法里
         updateCacheFromDb();
         initOK = true;
         updateCacheFromDbAtEveryMinute();
@@ -165,6 +167,7 @@ public class SegmentIDGenImpl implements IDGen {
                 synchronized (buffer) {
                     if (!buffer.isInitOk()) {
                         try {
+                            // Segment 延迟初始化
                             updateSegmentFromDb(key, buffer.getCurrent());
                             logger.info("Init buffer. Update leafkey {} {} from db", key, buffer.getCurrent());
                             buffer.setInitOk(true);
@@ -180,7 +183,7 @@ public class SegmentIDGenImpl implements IDGen {
     }
 
     /**
-     * 调用时机：第一次获取 SegmentId 的时候；更新另一个 Segment 时
+     * 调用时机：第一次获取 SegmentId 的时候；更新另一个 Segment 时(getIdFromSegmentBuffer)
      *
      * @param key
      * @param segment
@@ -193,12 +196,13 @@ public class SegmentIDGenImpl implements IDGen {
         // 动态设置步长
         // 第一次调用 get(final String key)
         if (!buffer.isInitOk()) {
+            // 获取新的 id 段
             leafAlloc = dao.updateMaxIdAndGetLeafAlloc(key);
             buffer.setStep(leafAlloc.getStep());
             // leafAlloc中的step为DB中的step
             buffer.setMinStep(leafAlloc.getStep());
         } else if (buffer.getUpdateTimestamp() == 0) {
-            // 第二次调用填充 SegmentBuffer::updateTimestamp
+            // 第二次调用填充 SegmentBuffer::updateTimestamp，即第一个 Segment 使用超过 10%，需要加载第二个 Segment
             leafAlloc = dao.updateMaxIdAndGetLeafAlloc(key);
             buffer.setUpdateTimestamp(System.currentTimeMillis());
             buffer.setStep(leafAlloc.getStep());
@@ -250,10 +254,9 @@ public class SegmentIDGenImpl implements IDGen {
             buffer.rLock().lock();
             try {
                 final Segment segment = buffer.getCurrent();
-                // 另一个 Segment 没有准备好且使用超过 10% 且更新线程未启动
-                if (!buffer.isNextReady() &&
-                        (segment.getIdle() < 0.9 * segment.getStep()) &&
-                        buffer.getThreadRunning().compareAndSet(false, true)) {
+
+                // 另一个 Segment 没有准备好，且使用超过 10%，且更新线程未启动
+                if (!buffer.isNextReady() && (segment.getIdle() < 0.9 * segment.getStep()) && buffer.getThreadRunning().compareAndSet(false, true)) {
                     service.execute(new Runnable() {
                         @Override
                         public void run() {
@@ -277,7 +280,7 @@ public class SegmentIDGenImpl implements IDGen {
                             }
                         }
                     });
-                }
+                } // 更新完另一个 Segment
 
                 long value = segment.getValue().getAndIncrement();
                 if (value < segment.getMax()) {
@@ -287,7 +290,7 @@ public class SegmentIDGenImpl implements IDGen {
                 buffer.rLock().unlock();
             }
 
-            // 等待更细线程执行结束
+            // 等待更新线程执行结束
             waitAndSleep(buffer);
             // 走到这一步说明上一个 Segment 已经没有 id 可以获取，需要切换 Segment
             buffer.wLock().lock();
@@ -301,6 +304,7 @@ public class SegmentIDGenImpl implements IDGen {
                     buffer.switchPos();
                     buffer.setNextReady(false);
                 } else {
+                    // 两个 Segment 都没有准备好
                     logger.error("Both two segments in {} are not ready!", buffer);
                     return new Result(EXCEPTION_ID_TWO_SEGMENTS_ARE_NULL, Status.EXCEPTION);
                 }
@@ -312,6 +316,7 @@ public class SegmentIDGenImpl implements IDGen {
 
     private void waitAndSleep(SegmentBuffer buffer) {
         int roll = 0;
+        // 更新线程正在执行
         while (buffer.getThreadRunning().get()) {
             roll += 1;
             if (roll > 10000) {

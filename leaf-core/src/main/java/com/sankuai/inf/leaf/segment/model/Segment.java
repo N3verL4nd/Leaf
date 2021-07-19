@@ -3,8 +3,17 @@ package com.sankuai.inf.leaf.segment.model;
 import java.util.concurrent.atomic.AtomicLong;
 
 public class Segment {
+    /**
+     * 获取 SegmentId 的对象
+     */
     private AtomicLong value = new AtomicLong(0);
+    /**
+     * SegmentId 最大值
+     */
     private volatile long max;
+    /**
+     * 步长，动态变更
+     */
     private volatile int step;
     private SegmentBuffer buffer;
 
